@@ -4,6 +4,7 @@ package main
 
 import (
 	"github.com/maxence-charriere/app/pkg/app"
+	"github.com/maxence-charriere/app/pkg/ui"
 )
 
 // The app entry point.
@@ -19,6 +20,8 @@ func main() {
 	app.Import(
 		&Hello{},
 		&City{},
+		&carousel{},
+		&ui.Carousel{},
 	)
 
 	// Defines the component to load when an URL without path is loaded.

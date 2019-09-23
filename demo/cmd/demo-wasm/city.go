@@ -108,6 +108,11 @@ func (n *City) OnMenuClick(s, e js.Value) {
 			OnClick: func(s, e js.Value) {
 				app.Navigate("hello")
 			}},
+		app.MenuItem{
+			Label: "Carousel example",
+			OnClick: func(s, e js.Value) {
+				app.Navigate("carousel")
+			}},
 	)
 }
 

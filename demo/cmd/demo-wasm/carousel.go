@@ -1,5 +1,3 @@
-// +build wasm
-
 package main
 
 import (
@@ -8,36 +6,33 @@ import (
 	"github.com/maxence-charriere/app/pkg/app"
 )
 
-// Hello is a component that describes a hello world. It implements the
-// app.Compo interface.
-type Hello struct {
-	Name string
+type carousel struct {
+	Images []string
 }
 
-// Render returns what to display.
-//
-// The onchange="Name" binds the onchange value to the Hello.Name
-// field.
-func (h *Hello) Render() string {
+func (c *carousel) OnMount() {
+	c.Images = []string{
+		"beijing.jpg",
+		"paris.jpg",
+		"sf.jpg",
+		"space.jpg",
+	}
+	app.Render(c)
+}
+
+func (c *carousel) Render() string {
 	return `
-<div class="Hello">
+<div class="carousel">
 	<button class="Menu" onclick="OnMenuClick" oncontextmenu="OnMenuClick">☰</button>
 
-	<h1>
-		Hello
-		{{if .Name}}
-			{{.Name}}
-		{{else}}
-			world
-		{{end}}!
-	</h1>
-	<input value="{{.Name}}" placeholder="What is your name?" onchange="Name" autofocus>
+	<main>
+		<ui.carousel data="{{json .Images}}">
+	</main>
 </div>
 	`
 }
 
-// OnMenuClick creates a context menu when the menu button is clicked.
-func (h *Hello) OnMenuClick(s, e js.Value) {
+func (c *carousel) OnMenuClick(s, e js.Value) {
 	app.NewContextMenu(
 		app.MenuItem{
 			Label: "Reload",
@@ -59,14 +54,22 @@ func (h *Hello) OnMenuClick(s, e js.Value) {
 			}},
 		app.MenuItem{Separator: true},
 		app.MenuItem{
+			Label: "Hello example",
+			OnClick: func(s, e js.Value) {
+				app.Navigate("hello")
+			}},
+		app.MenuItem{
 			Label: "City example",
 			OnClick: func(s, e js.Value) {
 				app.Navigate("city")
 			}},
-		app.MenuItem{
-			Label: "Carousel example",
-			OnClick: func(s, e js.Value) {
-				app.Navigate("carousel")
-			}},
 	)
+}
+
+type image struct {
+	Path string
+}
+
+func (i *image) Render() string {
+	return `<img src="{{.Path}}">`
 }
