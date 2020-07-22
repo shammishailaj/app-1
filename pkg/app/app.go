@@ -1,104 +1,99 @@
+//go:generate go run gen/html.go
+//go:generate go run gen/scripts.go
+//go:generate go fmt
+
 package app
 
 import (
 	"net/url"
-	"reflect"
+	"strings"
 
-	"github.com/maxence-charriere/app/pkg/log"
+	"github.com/maxence-charriere/go-app/v7/pkg/errors"
 )
 
 var (
-	// DefaultPath is the path to the component to be  loaded when no path is
-	// specified.
-	DefaultPath string
-
-	// NotFoundPath is the path to the component to be  loaded when an non
-	// imported component is requested.
-	NotFoundPath = "/app.notfound"
-
-	// LocalStorage is a storage that uses the browser local storage associated
-	// to the document origin. Data stored are encrypted and has no expiration
-	// time.
-	LocalStorage BrowserStorage
-
-	// SessionStorage is a storage that uses the browser session storage
-	// associated to the document origin. Data stored are encrypted and expire
-	// when the page session ends.
-	SessionStorage BrowserStorage
-
-	ui         = make(chan func(), 256)
-	components = make(compoBuilder)
-	msgs       = &messenger{
-		callExec: func(f func(...interface{}), args ...interface{}) {
-			go f(args...)
-		},
-		callOnUI: UI,
-	}
+	staticResourcesURL string
 )
 
-// Import imports the given components into the app.
-// Components must be imported in order the be used by the app package.
-// This allows components to be created dynamically when they are found into
-// markup.
-func Import(c ...Compo) {
-	for _, compo := range c {
-		if err := components.imports(compo); err != nil {
-			log.Error("importing component failed").
-				T("reason", err).
-				T("html tag", compoName(compo)).
-				T("component type", reflect.TypeOf(compo)).
-				T("fix", "rename component").
-				Panic()
-		}
-	}
+// Getenv retrieves the value of the environment variable named by the key. It
+// returns the value, which will be empty if the variable is not present.
+func Getenv(k string) string {
+	return getenv(k)
 }
 
-// Run runs the app with the loaded URL.
-func Run() {
-	run()
-}
-
-// Render renders the given component. It should be called whenever a component
-// is modified. Render is always executed on the UI goroutine.
-//
-// It panics if called before Run.
-func Render(c Compo) {
-	UI(func() { render(c) })
-}
-
-// UI calls a function on the UI goroutine.
-func UI(f func()) {
-	ui <- f
-}
-
-// Reload reloads the current page.
-func Reload() {
-	UI(func() { reload() })
-}
-
-// Bind creates a binding between a message and the given component.
-func Bind(msg string, c Compo) *Binding {
-	return bind(msg, c)
-}
-
-// Emit emits a message that triggers the associated bindings.
-func Emit(msg string, args ...interface{}) {
-	go msgs.emit(msg, args...)
-}
-
-// WindowSize returns the window width and height.
-func WindowSize() (w, h int) {
-	return windowSize()
+// KeepBodyClean prevents third-party Javascript libraries to add nodes to the
+// body element.
+func KeepBodyClean() (close func()) {
+	return keepBodyClean()
 }
 
 // Navigate navigates to the given URL.
 func Navigate(rawurl string) {
-	UI(func() {
-		navigate(rawurl, true)
+	dispatch(func() {
+		u, err := url.Parse(rawurl)
+		if err != nil {
+			panic(errors.New("navigating to page failed").
+				Tag("url", rawurl).
+				Wrap(err),
+			)
+		}
+
+		if u.String() == Window().URL().String() {
+			return
+		}
+
+		if err = navigate(u, true); err != nil {
+			panic(errors.New("navigating to page failed").
+				Tag("url", rawurl).
+				Wrap(err),
+			)
+		}
 	})
 }
 
-// LocationURL returns the current location url.
-func LocationURL() *url.URL {
-	return locationURL()
+// NewContextMenu displays a context menu filled with the given menu items.
+func NewContextMenu(menuItems ...MenuItemNode) {
+	dispatch(func() {
+		newContextMenu(menuItems...)
+	})
+}
+
+// Reload reloads the current page.
+func Reload() {
+	dispatch(func() {
+		reload()
+	})
+}
+
+// Run starts the wasm app and displays the UI node associated with the
+// requested URL path.
+//
+// It panics if Go architecture is not wasm.
+func Run() {
+	run()
+}
+
+// StaticResource makes a static resource path point to the right
+// location whether the root directory is remote or not.
+//
+// Static resources are resources located in the web directory.
+//
+// This call is used internally to resolve paths within Cite, Data, Href, Src,
+// and SrcSet. Paths already resolved are skipped.
+func StaticResource(path string) string {
+	if !strings.HasPrefix(path, "/web/") &&
+		!strings.HasPrefix(path, "web/") {
+		return path
+	}
+
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+
+	return staticResourcesURL + path
+}
+
+// Window returns the JavaScript "window" object.
+func Window() BrowserWindow {
+	return window
 }

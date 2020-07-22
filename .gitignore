@@ -5,18 +5,15 @@
 *.so
 *.dylib
 *.app
-*.wasm
 
 # Test binary, build with `go test -c`
 *.test
+test
 
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
-demo/demo-server
-demo/web/goapp.js
-demo/web/wasm_exec.js
 
 # Static generated files
 *.gz
-demo/web/.etag
+*.gcloudignore

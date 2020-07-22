@@ -2,275 +2,231 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"net/url"
-	"reflect"
+	"strings"
 	"syscall/js"
 
-	"github.com/maxence-charriere/app/pkg/log"
+	"github.com/maxence-charriere/go-app/v7/pkg/errors"
 )
 
 var (
-	page    *dom
-	cursorX int
-	cursorY int
+	body        *htmlBody
+	content     UI
+	contextMenu = &contextMenuLayout{}
+	rootPrefix  string
+	window      = &browserWindow{value: value{Value: js.Global()}}
 )
 
-func init() {
-	LocalStorage = newJSStorage("localStorage")
-	SessionStorage = newJSStorage("sessionStorage")
-
-	log.DefaultColor = ""
-	log.InfoColor = ""
-	log.ErrorColor = ""
-	log.WarnColor = ""
-	log.DebugColor = ""
-	log.CurrentLevel = log.DebugLevel
-}
-
 func run() {
-	go func() {
-		page = &dom{
-			compoBuilder:        components,
-			callOnUI:            UI,
-			msgs:                msgs,
-			trackCursorPosition: trackCursorPosition,
-			contextMenu:         &contextMenu{},
-		}
-		defer page.clean()
-
-		overrideAnchorClick := js.FuncOf(overrideAnchorClick)
-		defer overrideAnchorClick.Release()
-		js.Global().Set("onclick", overrideAnchorClick)
-
-		onpopstate := js.FuncOf(onPopState)
-		defer onpopstate.Release()
-		js.Global().Set("onpopstate", onpopstate)
-
-		url := locationURL()
-
-		if err := renderPage(url); err != nil {
-			log.Error("rendering page failed").
-				T("reason", err).
-				T("url", url).
-				Panic()
-		}
-
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-
-			case f := <-ui:
-				f()
-			}
-		}
+	defer func() {
+		err := recover()
+		displayLoadError(err)
+		panic(err)
 	}()
 
-	select {}
+	staticResourcesURL = Getenv("GOAPP_STATIC_RESOURCES_URL")
+	rootPrefix = Getenv("GOAPP_ROOT_PREFIX")
 
-	log.Info("wasm exit")
-	return
-}
+	initBody()
+	initContent()
+	initContextMenu()
 
-func render(c Compo) {
-	if err := page.render(c); err != nil {
-		log.Error("rendering component failed").
-			T("reason", err).
-			T("component", reflect.TypeOf(c))
+	onnav := FuncOf(onNavigate)
+	defer onnav.Release()
+	Window().Set("onclick", onnav)
+
+	onpopstate := FuncOf(onPopState)
+	defer onpopstate.Release()
+	Window().Set("onpopstate", onpopstate)
+
+	url := Window().URL()
+
+	if err := navigate(url, false); err != nil {
+		panic(errors.New("navigating to page failed").
+			Tag("url", url).
+			Wrap(err),
+		)
+	}
+
+	for {
+		select {
+		case f := <-uiChan:
+			f()
+		}
 	}
 }
 
-func reload() {
-	js.Global().Get("location").Call("reload")
-}
+func initBody() {
+	ctx, cancel := context.WithCancel(context.Background())
 
-func bind(msg string, c Compo) *Binding {
-	b, close := msgs.bind(msg, c)
-
-	if err := page.setBindingClose(c, close); err != nil {
-		log.Error("creating a binding failed").
-			T("reason", err).
-			T("component", reflect.TypeOf(c)).
-			T("message", msg).
-			Panic()
+	body = &htmlBody{
+		elem: elem{
+			ctx:       ctx,
+			ctxCancel: cancel,
+			jsvalue:   Window().Get("document").Get("body"),
+			tag:       "body",
+		},
 	}
 
-	return b
+	body.setSelf(body)
 }
 
-// NewContextMenu displays a context menu filled with the given menu items.
-func NewContextMenu(items ...MenuItem) {
-	Emit("__app.NewContextMenu", items)
-}
+func initContent() {
+	ctx, cancel := context.WithCancel(context.Background())
 
-// MenuItem represents a menu item.
-type MenuItem struct {
-	Disabled  bool
-	Keys      string
-	Icon      string
-	Label     string
-	OnClick   func(s, e js.Value)
-	Separator bool
-}
-
-func locationURL() *url.URL {
-	rawurl := js.Global().
-		Get("location").
-		Get("href").
-		String()
-
-	url, err := url.Parse(rawurl)
-	if err != nil {
-		log.Error("getting current url failed").
-			T("reason", err).
-			Panic()
+	content := &htmlDiv{
+		elem: elem{
+			ctx:       ctx,
+			ctxCancel: cancel,
+			jsvalue:   body.JSValue().Get("firstElementChild"),
+			tag:       "div",
+		},
 	}
 
-	return url
+	content.setSelf(content)
+	content.setParent(body)
+	body.body = append(body.body, content)
 }
 
-func renderPage(url *url.URL) error {
-	if url.Path == "" || url.Path == "/" {
-		url.Path = DefaultPath
-	}
-	if !components.isImported(compoNameFromURL(url)) {
-		url.Path = NotFoundPath
+func initContextMenu() {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	tmp := &htmlDiv{
+		elem: elem{
+			attrs:     map[string]string{"id": "app-context-menu"},
+			ctx:       ctx,
+			ctxCancel: cancel,
+			jsvalue: Window().
+				Get("document").
+				Call("getElementById", "app-context-menu"),
+			tag: "div",
+		},
 	}
 
-	compoName := compoNameFromURL(url)
-	compo, err := components.new(compoName)
-	if err != nil {
-		return err
-	}
-	mapCompoFieldFromURLQuery(compo, url.Query())
+	tmp.setSelf(tmp)
+	tmp.setParent(body)
+	body.body = append(body.body, tmp)
 
-	return page.newBody(compo)
+	body.replaceChildAt(1, contextMenu)
 }
 
-func trackCursorPosition(e js.Value) {
-	x := e.Get("clientX")
-	if !x.Truthy() {
+func displayLoadError(err interface{}) {
+	loadingLabel := Window().
+		Get("document").
+		Call("getElementById", "app-wasm-loader-label")
+	if !loadingLabel.Truthy() {
 		return
 	}
-	cursorX = x.Int()
-
-	y := e.Get("clientY")
-	if !y.Truthy() {
-		return
-	}
-	cursorY = y.Int()
+	loadingLabel.Set("innerText", fmt.Sprint(err))
 }
 
-func navigate(rawurl string, updateHistory bool) {
-	currentURL := locationURL()
-
-	u, err := url.Parse(rawurl)
-	if err != nil {
-		log.Error("navigating failed").
-			T("reason", err).
-			T("url", rawurl)
-		return
-	}
-
-	if u.Host == "" && u.Scheme == "" {
-		u.Scheme = currentURL.Scheme
-		u.Host = currentURL.Host
-	}
-
-	fragmentNav := u.Host == currentURL.Host &&
-		u.Path == currentURL.Path &&
-		u.Fragment != currentURL.Fragment &&
-		u.Fragment != ""
-
-	otherHostNav := u.Host != currentURL.Host
-
-	if otherHostNav || fragmentNav {
-		js.Global().Get("location").Set("href", u.String())
-		return
-	}
-
-	page.clean()
-	if err := renderPage(u); err != nil {
-		log.Error("rendering page failed").
-			T("reason", err).
-			T("url", u).
-			Panic()
-		return
-	}
-
-	if updateHistory {
-		js.Global().Get("history").Call("pushState", nil, "", rawurl)
-	}
-}
-
-func overrideAnchorClick(this js.Value, args []js.Value) interface{} {
-	event := args[0]
+func onNavigate(this Value, args []Value) interface{} {
+	url := ""
+	event := Event{Value: args[0]}
 
 	elem := event.Get("target")
 	if !elem.Truthy() {
 		elem = event.Get("srcElement")
 	}
 
-	if elem.Get("tagName").String() != "A" {
-		return nil
+	for {
+		switch elem.Get("tagName").String() {
+		case "A":
+			event.PreventDefault()
+			url = elem.Get("href").String()
+			Navigate(url)
+			return nil
+
+		case "BODY":
+			return nil
+
+		default:
+			elem = elem.Get("parentElement")
+			if !elem.Truthy() {
+				return nil
+			}
+		}
 	}
 
-	event.Call("preventDefault")
-	Navigate(elem.Get("href").String())
 	return nil
 }
 
-func onPopState(this js.Value, args []js.Value) interface{} {
-	UI(func() {
-		rawurl := js.Global().Get("location").Get("href").String()
-		navigate(rawurl, false)
+func onPopState(this Value, args []Value) interface{} {
+	dispatch(func() {
+		navigate(Window().URL(), false)
 	})
 	return nil
 }
 
-func windowSize() (w, h int) {
-	return windowWidth(), windowHeight()
+func navigate(u *url.URL, updateHistory bool) error {
+	contextMenu.hide()
+
+	if isExternalNavigation(u) {
+		Window().Get("location").Set("href", u.String())
+		return nil
+	}
+
+	path := u.Path
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+
+	root, ok := routes.ui(strings.TrimPrefix(u.Path, rootPrefix))
+	if !ok {
+		root = NotFound
+	}
+
+	if content != root {
+		if err := body.replaceChildAt(0, root); err != nil {
+			return errors.New("replacing content failed").Wrap(err)
+		}
+		content = root
+	}
+
+	if updateHistory {
+		Window().Get("history").Call("pushState", nil, "", u.String())
+	}
+
+	if isFragmentNavigation(u) {
+		dispatch(func() {
+			Window().ScrollToID(u.Fragment)
+		})
+	}
+
+	root.onNav(u)
+	return nil
 }
 
-func windowWidth() int {
-	w := js.Global().Get("innerWidth")
-	if !w.Truthy() {
-		w = js.Global().
-			Get("document").
-			Get("documentElement").
-			Get("clientWidth")
-	}
-	if !w.Truthy() {
-		w = js.Global().
-			Get("document").
-			Get("body").
-			Get("clientWidth")
-	}
-	if w.Type() != js.TypeNumber {
-		return 0
-	}
-	return w.Int()
+func isExternalNavigation(u *url.URL) bool {
+	return u.Host != "" && u.Host != Window().URL().Host
 }
 
-func windowHeight() int {
-	h := js.Global().Get("innerHeight")
-	if !h.Truthy() {
-		h = js.Global().
-			Get("document").
-			Get("documentElement").
-			Get("clientHeight")
+func isFragmentNavigation(u *url.URL) bool {
+	return u.Fragment != ""
+}
+
+func reload() {
+	Window().Get("location").Call("reload")
+}
+
+func newContextMenu(menuItems ...MenuItemNode) {
+	contextMenu.show(menuItems...)
+}
+
+func getenv(k string) string {
+	env := Window().Call("goappGetenv", k)
+
+	if !env.Truthy() {
+		return ""
 	}
-	if !h.Truthy() {
-		h = js.Global().
-			Get("document").
-			Get("body").
-			Get("clientHeight")
+	return env.String()
+}
+
+func keepBodyClean() func() {
+	close := Window().Call("goappKeepBodyClean")
+
+	return func() {
+		close.Invoke()
 	}
-	if h.Type() != js.TypeNumber {
-		return 0
-	}
-	return h.Int()
 }

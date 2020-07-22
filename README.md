@@ -1,193 +1,220 @@
+<h1 align="center">
+    <a href="https://github.com/maxence-charriere/go-app">
+        <img alt="go-app"  width="150" height="150" src="https://storage.googleapis.com/murlok-github/icon-192.png">
+    </a>
+</h1>
+
 <p align="center">
-    <a href="https://demo.murlok.io"><img alt="ui demo" src="https://github.com/maxence-charriere/app/wiki/assets/ui.png"></a>
+	<a href="https://circleci.com/gh/maxence-charriere/go-app"><img src="https://circleci.com/gh/maxence-charriere/go-app.svg?style=svg" alt="Circle CI Go build"></a>
+    <a href="https://goreportcard.com/report/github.com/maxence-charriere/go-app"><img src="https://goreportcard.com/badge/github.com/maxence-charriere/go-app" alt="Go Report Card"></a>
+	<a href="https://GitHub.com/maxence-charriere/go-app/releases/"><img src="https://img.shields.io/github/release/maxence-charriere/go-app.svg" alt="GitHub release"></a>
+	<a href="https://pkg.go.dev/github.com/maxence-charriere/go-app/v7/pkg/app"><img src="https://img.shields.io/badge/dev-reference-007d9c?logo=go&logoColor=white&style=flat" alt="pkg.go.dev docs"></a>
+	<a href="https://github.com/maxence-charriere/go-app/wiki"><img src="https://img.shields.io/badge/github-wiki-6E7AF8?logo=github&style=flat" alt="pkg.go.dev docs"></a>
+    <a href="https://twitter.com/jonhymaxoo"><img alt="Twitter URL" src="https://img.shields.io/badge/twitter-@jonhymaxoo-35A9F8?logo=twitter&style=flat"></a>
+    <a href="https://opencollective.com/go-app" alt="Financial Contributors on Open Collective"><img src="https://opencollective.com/go-app/all/badge.svg?label=open+collective&color=4FB9F6" /></a>
 </p>
 
-# app
+**go-app** is a package to build [progressive web apps (PWA)](https://developers.google.com/web/progressive-web-apps/) with [Go programming language](https://golang.org) and [WebAssembly](https://webassembly.org).
 
-<p align="center">
-	<a href="https://circleci.com/gh/maxence-charriere/app"><img src="https://circleci.com/gh/maxence-charriere/app.svg?style=svg" alt="Circle CI Go build"></a>
-    <a href="https://goreportcard.com/report/github.com/maxence-charriere/app"><img src="https://goreportcard.com/badge/github.com/maxence-charriere/app" alt="Go Report Card"></a>
-    <a href="https://godoc.org/github.com/maxence-charriere/app/pkg/app"><img src="https://godoc.org/github.com/maxence-charriere/app/pkg/app?status.svg" alt="GoDoc"></a>
-    <a href="https://www.patreon.com/maxencecharriere"><img alt="Custom badge" src="https://img.shields.io/endpoint.svg?url=https%3A%2F%2Fshieldsio-patreon.herokuapp.com%2Fmaxencecharriere" alt="patreon"></a>
-</p>
+It uses a [declarative syntax](#declarative-syntax) that allows creating and dealing with HTML elements only by using Go, and without writing any HTML markup.
 
-A [WebAssembly](https://webassembly.org) framework to build GUI with
-[Go](https://golang.org), [HTML](https://en.wikipedia.org/wiki/HTML5) and
-[CSS](https://en.wikipedia.org/wiki/Cascading_Style_Sheets).
-
-It features:
-
-- [PWA support](https://developers.google.com/web/progressive-web-apps/)
-- [Build tool](https://github.com/maxence-charriere/app/tree/master/cmd/goapp/main.go) that removes the hassle of packaging wasm apps
-- [React](https://reactjs.org) flavored API
-
+The package also provides an [http.handler](#http-handler) ready to serve all the required resources to run Go-based progressive web apps.
 
 ## Install
 
-Requires [Go 1.13](https://golang.org/doc/go1.13)
+**go-app** requirements:
+
+- [Go 1.14](https://golang.org/doc/go1.14) or newer
+- [Go module](https://github.com/golang/go/wiki/Modules)
 
 ```sh
-# Package sources + goapp CLI:
-go get -u -v github.com/maxence-charriere/app/cmd/goapp
+# Init go module (if not initialized):
+go mod init
 
-# Package sources only:
-go get -u -v github.com/maxence-charriere/app/pkg/app
-
-```
-
-## Getting started
-
-```sh
-cd $GOPATH/src          # go to your gopath sources (optional)
-mkdir demo && cd demo   # create and go to your go package
-goapp init -v           # init project layout
-goapp run -v -b chrome  # run the app and launch the main page on chrome
+# Get package:
+go get -u -v github.com/maxence-charriere/go-app/v7
 ```
 
 ## How it works
 
-### Project layout
+<p align="center">
+     <img alt="app diagram"  width="680" src="https://storage.googleapis.com/murlok-github/app.png">
+</p>
 
-```bash
-demo
-└── cmd
-    ├── demo-server
-    │   ├── main.go
-    │   └── web
-    │       ├── style sheets...
-    │       ├── images...
-    │       └── etc...
-    └── demo-wasm
-        └── main.go
-```
+- **Users:** The users of your app. They request pages and resources from their web browser.
+- **[app.Handler](https://pkg.go.dev/github.com/maxence-charriere/go-app/pkg/app#Handler)**: An [http.Handler](https://golang.org/pkg/net/http/#Handler) used by your server or cloud function. It serves your app, its static resources, and all the required files to make it work on user browsers.
+- **Application**: Your app built with this package. It is built as a WebAssembly (.wasm) binary and is served by the [app.Handler](https://pkg.go.dev/github.com/maxence-charriere/go-app/pkg/app#Handler).
+- **Other static resources**: Styles, images, and scripts used by your app. They are also served by the [app.Handler](https://pkg.go.dev/github.com/maxence-charriere/go-app/pkg/app#Handler).
 
-- The `cmd` directory contains the project main applications.
-- The `demo-wasm` directory contains the app that is compiled in **wasm** and that will run in the browser.
-- The `demo-server` directory contains the server that serves the **wasm** app and its resources.
-- The `web` directory contrains the app resources like style sheets (css), images and other static resources.
+## Declarative syntax
 
-Project layout can be initialized by running this command in the repository root.
-
-```bash
-goapp init -v
-```
-
-### App
-
-The app is the Go code compiled in web assembly and executed in the browser.
+**go-app** uses a declarative syntax so you can write component-based UI elements just by using the Go programming language.
 
 ```go
-// cmd/demo-wasm/main.go
-
 package main
 
-import (
-    "log"
+import "github.com/maxence-charriere/go-app/v7/pkg/app"
 
-    "github.com/maxence-charriere/app/pkg/app"
-    "github.com/maxence-charriere/app/pkg/log"
-)
-
-type Hello struct {
-    Name string
+type hello struct {
+    app.Compo
+    name string
 }
 
-func (h *Hello) Render() string {
-    return `
-<div class="Hello">
-    <h1>
-        Hello
-        {{if .Name}}
-            {{.Name}}
-        {{else}}
-            world
-        {{end}}!
-    </h1>
-    <input value="{{.Name}}" placeholder="What is your name?" onchange="Name" autofocus>
-</div>
-    `
+func (h *hello) Render() app.UI {
+    return app.Div().Body(
+        app.Main().Body(
+            app.H1().Body(
+                app.Text("Hello, "),
+                app.If(h.name != "",
+                    app.Text(h.name),
+                ).Else(
+                    app.Text("World"),
+                ),
+            ),
+            app.Input().
+                Value(h.name).
+                Placeholder("What is your name?").
+                AutoFocus(true).
+                OnChange(h.OnInputChange),
+        ),
+    )
+}
+
+func (h *hello) OnInputChange(ctx app.Context, e app.Event) {
+    h.name = ctx.JSSrc.Get("value").String()
+    h.Update()
 }
 
 func main() {
-    app.Import(&Hello{})
-
-    app.DefaultPath = "/hello"
+    app.Route("/", &hello{})
+    app.Route("/hello", &hello{})
     app.Run()
 }
+
 ```
 
-### Server
+The app is built with the Go build tool by specifying WebAssembly as architecture and javascript as operating system:
 
-The server serves the web assembly Go program and the other resources.
+```sh
+GOARCH=wasm GOOS=js go build -o app.wasm
+```
+
+Note that the build output is named `app.wasm` because the HTTP handler expects the wasm app to be named that way in order to serve its content.
+
+## HTTP handler
+
+Once the wasm app is built, the next step is to serve it.
+
+This package provides an [http.Handler implementation](https://pkg.go.dev/github.com/maxence-charriere/go-app/pkg/app#Handler) ready to serve a PWA and all the required resources to make it work in a web browser.
+
+The handler can be used to create either a web server or a cloud function (AWS Lambda, Google Cloud function or Azure function).
 
 ```go
-// cmd/demo-server/main.go
-
 package main
 
 import (
-    "log"
     "net/http"
-    "github.com/maxence-charriere/app"
+
+    "github.com/maxence-charriere/go-app/v7/pkg/app"
 )
 
 func main() {
-    http.Handle("/", &app.Handler{})
+    h := &app.Handler{
+        Title:  "Hello Demo",
+        Author: "Maxence Charriere",
+    }
 
-    if err := http.ListenAndServe(":3000", nil); err != nil {
-        log.Fatal(err)
+    if err := http.ListenAndServe(":7777", h); err != nil {
+        panic(err)
     }
 }
-
 ```
 
-### Build
+The server is built as a standard Go program:
 
-The whole project can be built with the
-[goapp](https://github.com/maxence-charriere/app/tree/master/cmd/goapp/main.go)
-CLI tool.
-**goapp** builds the server, the wasm app, imports the required javascript
-support file and puts the pieces together to provide a ready to use project.
-
-```bash
-# Get the goapp CLI tool:
-go get -u github.com/maxence-charriere/app/cmd/goapp
-
-# Builds a server ready to serve the wasm app and its resources:
-goapp build -v
-
-# Launches the server and app in the default browser:
-goapp run -v -b default
+```sh
+go build
 ```
 
-Once built, the directory tree should look like:
+Once the server and the wasm app built, `app.wasm` must be moved in the `web` directory, located by the side of the server binary. The web directory is where to put static resources, such as the wasm app, styles, scripts, or images.
 
-```bash
-demo
-└── cmd
-    ├── demo-server
-    │   ├── demo-server (server)
-    │   ├── main.go
-    │   └── web
-    │       ├── goapp.wasm (app)
-    │       ├── wasm_exec.js
-    │       ├── images...
-    │       └── etc...
-    └── demo-wasm
-        └── main.go
+The directory should look like as the following:
+
+```sh
+.                   # Directory root
+├── hello           # Server binary
+├── main.go         # Server source code
+└── web             # Directory for static resources
+    └── app.wasm    # Wasm binary
 ```
 
-See a [full example](https://github.com/maxence-charriere/app/tree/master/demo) and its online demo:
+## Works on mainstream browsers
 
-- [Hello](https://demo.murlok.io)
-- [City](https://demo.murlok.io/city)
+|         | Chrome | Edge | Firefox | Opera | Safari |
+| :------ | :----: | :--: | :-----: | :---: | :----: |
+| Desktop |   ✔    | ✔\*  |    ✔    |   ✔   |   ✔    |
+| Mobile  |   ✔    |  ✔   |    ✔    |   ✔   |   ✔    |
 
-## Support
-|Platform|Chrome|Edge|Firefox|Safari|
-|:-|:-:|:-:|:-:|:-:|
-|Desktop|✔|✔*|✔|✔|
-|Mobile|✔|✔|✔|✔|
+\*_only Chromium based [Edge](https://www.microsoft.com/edge)_
 
-Issues:
+## Demo
 
-- Non Chromiun based Edge does not support `TextEncoder` which is used by the javascript support file provided by Go.
+The hello example introduced above:
+
+| Sources                                                                                                         | Description                                                                                           |
+| --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| [hello](https://github.com/maxence-charriere/go-app-demo/tree/v6/hello)                                         | Hello app.                                                                                            |
+| [hello-local](https://github.com/maxence-charriere/go-app-demo/tree/v6/hello-local)                             | Hello app that runs on a local server.                                                                |
+| [hello-local-external-root](https://github.com/maxence-charriere/go-app-demo/tree/v6/hello-local-external-root) | Hello app that runs on a local server but with a custom root directory.                               |
+| [hello-docker](https://github.com/maxence-charriere/go-app-demo/tree/v6/hello-docker)                           | Hello app that run in a Docker container.                                                             |
+| [hello-gcloud-appengine](https://github.com/maxence-charriere/go-app-demo/tree/v6/hello-gcloud-appengine)       | Hello app that run on Google Cloud App Engine.<br> [See live](https://go-app-demo-42.appspot.com)     |
+| [hello-gcloud-func](https://github.com/maxence-charriere/go-app-demo/tree/v6/hello-gcloud-func)                 | Hello app that run on Google a Cloud Function.<br> [See live](https://go-app-demo-42.firebaseapp.com) |
+
+## Live apps
+
+<p align="center">
+    <a href="https://murlok.io">
+        <img alt="Murlok.io"  width="400" src="https://storage.googleapis.com/murlok-github/murlok-thumb.png">
+    </a>
+    <a href="https://luck.murlok.io">
+        <img alt="luck app"  width="400" src="https://storage.googleapis.com/murlok-github/luck-thumb.png">
+    </a>
+    <a href="https://lu4p.github.io/astextract">
+        <img alt="luck app"  width="400" src="https://storage.googleapis.com/murlok-github/astextract-thumb.png">
+    </a>
+</p>
+
+## How to migrate app from v6 to v7
+
+See [migration guide](https://github.com/maxence-charriere/go-app/blob/v7/docs/v7-migration.md).
+
+## Contributors
+
+### Code Contributors
+
+This project exists thanks to all the people who contribute. [[Contribute](CONTRIBUTING.md)].
+
+<a href="https://github.com/maxence-charriere/go-app/graphs/contributors"><img src="https://opencollective.com/go-app/contributors.svg?width=890&button=false" /></a>
+
+### Financial Contributors
+
+Become a financial contributor and help us sustain [go-app](https://github.com/maxence-charriere/go-app) development. [[Contribute](https://opencollective.com/go-app/contribute)]
+
+#### Individuals
+
+<a href="https://opencollective.com/go-app"><img src="https://opencollective.com/go-app/individuals.svg?width=890"></a>
+
+#### Organizations
+
+Support this project with your organization. Your logo will show up here with a link to your website. [[Contribute](https://opencollective.com/go-app/contribute)]
+
+<a href="https://opencollective.com/go-app/organization/0/website"><img src="https://opencollective.com/go-app/organization/0/avatar.svg"></a>
+<a href="https://opencollective.com/go-app/organization/1/website"><img src="https://opencollective.com/go-app/organization/1/avatar.svg"></a>
+<a href="https://opencollective.com/go-app/organization/2/website"><img src="https://opencollective.com/go-app/organization/2/avatar.svg"></a>
+<a href="https://opencollective.com/go-app/organization/3/website"><img src="https://opencollective.com/go-app/organization/3/avatar.svg"></a>
+<a href="https://opencollective.com/go-app/organization/4/website"><img src="https://opencollective.com/go-app/organization/4/avatar.svg"></a>
+<a href="https://opencollective.com/go-app/organization/5/website"><img src="https://opencollective.com/go-app/organization/5/avatar.svg"></a>
+<a href="https://opencollective.com/go-app/organization/6/website"><img src="https://opencollective.com/go-app/organization/6/avatar.svg"></a>
+<a href="https://opencollective.com/go-app/organization/7/website"><img src="https://opencollective.com/go-app/organization/7/avatar.svg"></a>
+<a href="https://opencollective.com/go-app/organization/8/website"><img src="https://opencollective.com/go-app/organization/8/avatar.svg"></a>
+<a href="https://opencollective.com/go-app/organization/9/website"><img src="https://opencollective.com/go-app/organization/9/avatar.svg"></a>
